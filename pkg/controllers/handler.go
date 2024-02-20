@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"backenddemo/pkg/dbconfig"
 	"backenddemo/pkg/models"
 	"encoding/json"
 	"fmt"
@@ -8,68 +9,97 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+
+	"gorm.io/gorm"
 )
 
-type Datas []models.Dataget
-type testdata struct {
-	Getcharecter string `json:"getcharacter"`
-	Good         string `json:"good"`
+// ตั้งค่าและเรียกใช้ ฐานข้อมูล
+var db *gorm.DB
+
+func init() {
+	dbconfig.Connect()
+	db = dbconfig.GetDB()
+	fmt.Println("Successfully connected to database!", db)
 }
 
-func Gotestget(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+type Characters models.CharacterData
+
+func GetallCharacter(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
-	data := models.GetAllBlueArchive()
-	json.NewEncoder(w).Encode(data)
+	var getalldata []Characters
+	db.Table("Characters").Find(&getalldata)
+
+	res, _ := json.Marshal(getalldata)
+	fmt.Println(res)
+
+	json.NewEncoder(w).Encode(getalldata)
+
 }
 
-func GocreateBlueArchive(w http.ResponseWriter, r *http.Request) {
-	var data models.BlueArchivess
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+func CreateCharacter(w http.ResponseWriter, r *http.Request) {
+	db.AutoMigrate(&Characters{})
+	w.WriteHeader(http.StatusOK)
+	var getdatabyid = &Characters{}
+	if err := json.NewDecoder(r.Body).Decode(&getdatabyid); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	res, nil := models.CreateBlueArchive(data)
-	fmt.Print(nil)
-	json.NewEncoder(w).Encode(res)
-
-}
-
-func Gotestcrate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	var getdata models.Dataget
-	json.NewDecoder(r.Body).Decode(&getdata)
-	testdatas := testdata{
-		Getcharecter: getdata.Title + getdata.Desc,
-		Good:         getdata.Title + getdata.Desc,
+	Newcharacter := Characters{
+		Character: getdatabyid.Character,
 	}
-	json.NewEncoder(w).Encode(testdatas)
 
+	if err := db.Table("Characters").Create(&Newcharacter).Error; err != nil {
+		return
+	}
+	json.NewEncoder(w).Encode(&Newcharacter)
 }
 
-func Quryparamblue(w http.ResponseWriter, r *http.Request) {
+func GetcharacterbyID(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	var getdatabyid Characters
 
-	Idget := r.URL.Query().Get("id")
-	Id, _ := strconv.Atoi(Idget)
-	// check := r.URL.Query().Get("check")
-
-	data, _ := models.GetBlueById(Id)
-	json.NewEncoder(w).Encode(data)
+	getid := r.URL.Query().Get("id")
+	Id, _ := strconv.Atoi(getid)
+	db.Table("Characters").Where("ID=?", Id).Find(&getdatabyid)
+	json.NewEncoder(w).Encode(&getdatabyid)
 
 }
+func UpdateCharacter(w http.ResponseWriter, r *http.Request) {
+	var updateData = &Characters{}
+	var getdatabyid Characters
+	if err := json.NewDecoder(r.Body).Decode(&updateData); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	databyid := db.Table("Characters").Where("ID=?", updateData.Id).Find(&getdatabyid)
+	if updateData.Character != "" {
+		getdatabyid.Character = updateData.Character
+	}
 
-// res, _ := json.Marshal(id)
+	databyid.Save(&getdatabyid)
 
-func UploadFile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(&getdatabyid)
+}
+
+func DeleteCharacterbyID(w http.ResponseWriter, r *http.Request) {
+	var data Characters
+	var dropData = &Characters{}
+	if err := json.NewDecoder(r.Body).Decode(&dropData); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	db.Table("Characters").Where("ID=?", dropData.Id).Delete(data)
+}
+
+func UploadCharacterFile(w http.ResponseWriter, r *http.Request) {
 	file, handler, err := r.FormFile("file")
 	fileName := r.FormValue("file_name")
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
-
 	f, err := os.OpenFile(handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
